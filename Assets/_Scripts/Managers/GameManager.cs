@@ -4,42 +4,97 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
-    [Header("References")]
+    [SerializeField] private BlackJackManager blackJackManager;
     [SerializeField] private DeckManager deckManager;
-    [SerializeField] private BlackjackRoundManager roundManager;
+    
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
 
-    // hand prefab for each player
-    [SerializeField] public GameObject handPrefab;
-    // parent in which each hand is instantiated under
-    [SerializeField] public Transform handsParent;
+    [SerializeField] private BlackJackState state;
 
-    // each player hand
-    [SerializeField] private List<BJHandManager> playerHands = new List<BJHandManager>();
-    // the dealer hand
-    [SerializeField] private BJHandManager dealerHand;
+    [Header("Variables")] 
+    [SerializeField] private float dealDelay = 0.35f;
 
-    public void AddNewPlayerHand()
+    private void Start()
     {
-        // Spawn in a new hand using prefab
-        var newHandObj = Instantiate(handPrefab, handsParent);
+        StartCoroutine(GameLoop());
+    }
 
-        // get the hand's manager
-        var hand = newHandObj.GetComponent<BJHandManager>();
-        // if it is not null
-        if (hand != null)
+    private IEnumerator GameLoop()
+    {
+        while (true)
         {
-            // set its name in hierarchy
-            hand.name = $"PlayerHand_{playerHands.Count}";
-            // add it total player hands
-            playerHands.Add(hand);
+            yield return StartCoroutine(BettingState());
+            yield return StartCoroutine(DealingState());
+            yield return StartCoroutine(PlayerTurnState());
+            yield return StartCoroutine(DealerTurnState());
+            yield return StartCoroutine(ResolutionState());
         }
     }
-
-    public void BeginGame()
+    
+    private IEnumerator BettingState()
     {
-        // transfer our hands over to the round manager
-        roundManager.SetHands(playerHands, dealerHand);
-        // start the round
-        roundManager.StartRound();
+        state = BlackJackState.Betting;
+        
+        yield return new WaitForSeconds(0.5f);
     }
+
+    private IEnumerator DealingState()
+    {
+        state = BlackJackState.Dealing;
+
+        yield return StartCoroutine(blackJackManager.DealHands(dealDelay));
+
+        yield return new WaitForSeconds(1f);
+    }
+
+    private IEnumerator PlayerTurnState()
+    {
+        state = BlackJackState.PlayerTurn;
+
+        blackJackManager.playerTurnDone = false;
+
+        while (!blackJackManager.playerTurnDone)
+        {
+            yield return null;
+        }
+        
+        yield return new WaitForSeconds(1f);
+    }
+
+    private IEnumerator DealerTurnState()
+    {
+        state = BlackJackState.DealerTurn;
+        
+        blackJackManager.RevealDealerSecondCard();
+        
+        blackJackManager.dealerTurnDone = blackJackManager.CheckEndGame();
+        
+        while (!blackJackManager.dealerTurnDone)
+        {
+            blackJackManager.DealerTurn();
+            yield return new WaitForSeconds(dealDelay);
+        }
+        
+        yield return new WaitForSeconds(2f);
+    }
+
+    private IEnumerator ResolutionState()
+    {
+        state = BlackJackState.Resolution;
+        
+        blackJackManager.CheckWin();
+        
+        yield return new WaitForSeconds(2f);
+    }
+    
+    public bool IsPlayerTurn()
+    {
+        return state == BlackJackState.PlayerTurn;
+    }
+
+    public bool IsDealerTurn()
+    {
+        return state == BlackJackState.DealerTurn;
+    }
+
 }

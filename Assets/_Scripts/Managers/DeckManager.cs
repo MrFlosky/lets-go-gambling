@@ -1,143 +1,76 @@
+using System;
 using System.Collections.Generic;
-using Unity.VisualScripting;
+using NUnit.Framework;
 using UnityEngine;
 
 public class DeckManager : MonoBehaviour
 {
-    // total number of decks in full deck
-    [SerializeField] private int numberOfDecks = 1;
-    // set seed for cards
-    [SerializeField] private int seed = 0;
+    [Header("Sprites")]
+    public Sprite cardBackSprite;
     
-    // default card data SO
-    [SerializeField] private CardData defaultCard;
+    [Header("Deck Settings")]
+    [Tooltip("How many sets of 52 cards are in total deck")]
+    [SerializeField] private int deckCount;
     
-    // prefab for each card
-    [SerializeField] private GameObject cardPrefab;
+    [Tooltip("Seed for the deck generation")]
+    [SerializeField] private int seed;
     
-    // background sprite for each card
-    [SerializeField] private Sprite cardBackground;
-    
-    // all the card sprites (A-K, and all suits)
-    [SerializeField] private Sprite[] cardSprites = new Sprite[52];
-    
-    // current deck
-    [SerializeField] private List<CardData> currentDeck = new List<CardData>();
+    [Header("Deck")]
+    public List<CardInstance> deck;
 
-    // all the hands
-    [SerializeField] private List<BJHandManager> allHands = new List<BJHandManager>();
-    
     private void Start()
     {
-        // create the deck and shuffle it
-        BuildDeck();
+        CreateDeck();
         ShuffleDeck();
     }
-    
-    public void RegisterHand(BJHandManager hand)
-    {
-        // if we don't already have the hand, add it
-        if (!allHands.Contains(hand))
-            allHands.Add(hand);
-    }
 
-    public void UnregisterHand(BJHandManager hand)
+    private void CreateDeck()
     {
-        // if we already have the hand, remove it
-        if (allHands.Contains(hand))
-            allHands.Remove(hand);
-    }
-    
-    void BuildDeck()
-    {
-        // clear the current deck
-        currentDeck.Clear();
+        deck ??= new List<CardInstance>();
 
-        // for each type of card * number of decks we want in the full deck
-        for (var i = 0; i < cardSprites.Length * numberOfDecks; i++)
+        deck.Clear();
+
+        for (int i = 0; i < deckCount; i++)
         {
-            // get the sprite
-            var sprite = cardSprites[i % cardSprites.Length];
-            // create a new copy of the default card
-            var card = defaultCard.Clone();
-
-            // set the card's name and sprite value based on the sprite we are on
-            card.name = sprite.name;
-            card.SetCardData(sprite.name, sprite, cardBackground);
-            
-            // split the name into the parts of a card (jack_of_hearts => jack,hearts)
-            var parts = sprite.name.Split("_of_");
-            var valueStr = parts[0];
-            var suitStr = parts[1];
-
-            // set the suit to upper
-            card.cardSuit = suitStr.ToUpper();
-
-            // get the value based on the valueStr
-            int value;
-            switch (valueStr)
+            foreach (CardSuit suit in Enum.GetValues(typeof(CardSuit)))
             {
-                case "ace":
-                    value = 1;
-                    break;
-                case "jack":
-                    value = 11;
-                    break;
-                case "queen":
-                    value = 12;
-                    break;
-                case "king":
-                    value = 13;
-                    break;
-                default:
-                    int.TryParse(valueStr, out value);
-                    break;
+                foreach (CardRank rank in Enum.GetValues(typeof(CardRank)))
+                {
+                    CardInstance card = new CardInstance
+                    {
+                        suit = suit,
+                        rank = rank,
+                        value = GetCardValue(rank)
+                    };
+
+                    deck.Add(card);
+                }
             }
-
-            // set the value
-            card.cardValue = value;
-            // add it to the deck
-            currentDeck.Add(card);
         }
     }
     
-    public void ShuffleDeck()
+    private int GetCardValue(CardRank rank)
     {
-        // set the seed in System.Random
-        var rng = new System.Random(seed);
-        // get deck count
-        var n = currentDeck.Count;
-        // for each card
-        while (n > 1)
+        return rank switch
         {
-            // decrease by 1
-            n--;
-            // get next value from seed
-            var k = rng.Next(n + 1);
-            // swap the two cards
-            (currentDeck[n], currentDeck[k]) = (currentDeck[k], currentDeck[n]);
-        }
+            CardRank.Ace => 11,
+            CardRank.Jack => 10,
+            CardRank.Queen => 10,
+            CardRank.King => 10,
+            _ => (int)rank
+        };
     }
     
-    // Draws a card to the specified hand
-    public CardData DrawCardToHand(BJHandManager hand, bool faceDown = false)
+    private void ShuffleDeck()
     {
-        // if the current deck is empty
-        if (currentDeck.Count == 0)
+        System.Random rng = new System.Random(seed);
+
+        for (int i = deck.Count - 1; i > 0; i--)
         {
-            // send warning
-            Debug.LogWarning("Deck is empty!");
-            return null;
+            int j = rng.Next(0, i + 1);
+
+            // swap
+            (deck[i], deck[j]) = (deck[j], deck[i]);
         }
-
-        // otherwise, get topdecked
-        var card = currentDeck[0];
-        // remove that card from the deck
-        currentDeck.RemoveAt(0);
-        // and add it to that hand
-        hand.AddCard(card, faceDown);
-
-        // then return the card for more data
-        return card;
     }
 }
